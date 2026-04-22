@@ -91,6 +91,7 @@ def render_edited(gaussians, viewpoint_camera, mask=None):
             campos=viewpoint_camera.camera_center.cuda(),
             prefiltered=False,
             debug=False,
+            antialiasing=False,
     )
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
     

@@ -241,7 +241,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
         dataset_length, C, H, W = image_tensor.shape
         
-        args.resize = 1024
         factor = args.resize / max(W, H)
         factor = math.ceil(min(W, H) * factor / 64) * 64 / min(W, H)
         new_width = int((W * factor) // 64) * 64
@@ -550,13 +549,14 @@ if __name__ == "__main__":
     parser.add_argument("--prompt", type=str, default = "")
     parser.add_argument('--guidance_scale', type=float, default=10.5)
     parser.add_argument('--image_guidance_scale', type=float, default=1.2)
+    parser.add_argument('--resize', type=int, default=512)
 
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
     if args.configs:
-        import mmcv
+        from mmengine import Config
         from utils.params_utils import merge_hparams
-        config = mmcv.Config.fromfile(args.configs)
+        config = Config.fromfile(args.configs)
         args = merge_hparams(args, config)
     print("Optimizing " + args.model_path)
 

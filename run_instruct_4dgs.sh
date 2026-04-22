@@ -4,8 +4,8 @@
 # ./run_instruct_4dgs.sh [dataset] [scene_name] [prompt] [guidance_scale] [image_guidance_scale]
 # ===================================================================
 
-if [ "$#" -ne 5 ]; then
-    echo "Usage: $0 <dataset> <scene_name> <prompt> <guidance_scale> <image_guidance_scale>"
+if [ "$#" -lt 5 ] || [ "$#" -gt 6 ]; then
+    echo "Usage: $0 <dataset> <scene_name> <prompt> <guidance_scale> <image_guidance_scale> [resize=512]"
     exit 1
 fi
 
@@ -14,11 +14,13 @@ SCENE_NAME="$2"
 PROMPT="$3"
 GUIDANCE_SCALE="$4"
 IMAGE_GUIDANCE_SCALE="$5"
+RESIZE="${6:-512}"
 
 echo "------------------------------------------"
 echo "  - dataset: ${DATASET}"
 echo "  - scene: ${SCENE_NAME}"
 echo "  - prompt: \"${PROMPT}\""
+echo "  - resize: ${RESIZE}"
 echo "------------------------------------------"
 echo ""
 
@@ -32,7 +34,7 @@ python ./ip2p_models/multiview_edit.py \
     --dataset "${DATASET}" \
     --scene "${SCENE_NAME}" \
     --prompt "${PROMPT}" \
-    --resize 1024 \
+    --resize ${RESIZE} \
     --steps 20 \
     --guidance_scale ${GUIDANCE_SCALE} \
     --image_guidance_scale ${IMAGE_GUIDANCE_SCALE}
@@ -61,7 +63,8 @@ python refine_sds.py \
     --model_path "./output/${DATASET}/${SCENE_NAME}" \
     --prompt "${PROMPT}" \
     --guidance_scale ${GUIDANCE_SCALE} \
-    --image_guidance_scale ${IMAGE_GUIDANCE_SCALE}
+    --image_guidance_scale ${IMAGE_GUIDANCE_SCALE} \
+    --resize ${RESIZE}
 
 echo "✅ Completed score refinement."
 echo ""
