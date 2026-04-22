@@ -114,9 +114,9 @@ if __name__ == "__main__":
     args = get_combined_args(parser)
     print("Rendering " , args.ply_path)
     if args.configs:
-        import mmcv
+        from mmengine import Config
         from utils.params_utils import merge_hparams
-        config = mmcv.Config.fromfile(args.configs)
+        config = Config.fromfile(args.configs)
         args = merge_hparams(args, config)
     # Initialize system state (RNG)
     safe_state(args.quiet)
@@ -150,7 +150,7 @@ if __name__ == "__main__":
         imgs.append(to8b(rendered_img.detach().cpu()).transpose(1,2,0))
 
     ## TODO: save_path
-    imageio.mimwrite(os.path.join(args.model_path, f"edited_{os.path.splitext(os.path.basename(args.configs))[0]}.mp4"), imgs, fps=30)
+    imageio.mimwrite(os.path.join(args.model_path, f"edited_{os.path.splitext(os.path.basename(args.configs))[0]}.mp4"), imgs, fps=30, macro_block_size=1)
     print("Video Saved.")
         
 
