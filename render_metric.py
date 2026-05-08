@@ -147,6 +147,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip_video", action="store_true")
     parser.add_argument("--configs", type=str)
     parser.add_argument("--ply_path", type=str)
+    parser.add_argument("--prompt", type=str, default="Make it look like a fauvism painting")
     args = get_combined_args(parser)
 
     print("Rendering ", args.ply_path)
@@ -177,7 +178,7 @@ if __name__ == "__main__":
     
     # Ply & Model Load
     gaussians.load_ply(args.ply_path)
-    gaussians.load_model(os.path.join(args.model_path, 'point_cloud_3dedit', 'iteration_500'))
+    gaussians.load_model(os.path.join(args.model_path, 'point_cloud_3dedit', args.prompt, 'iteration_500'))
 
     after_xyz = gaussians.get_xyz
     print("after edit: ", gaussians.get_xyz.shape)
@@ -194,9 +195,7 @@ if __name__ == "__main__":
     lpipsa = []
     clip_scores = []   # ★ CLIP 유사도 리스트 추가
 
-    # 텍스트 프롬프트
-    clip_prompt = "Make the person a wood sculpture"
-    edited_images_path = "./data/dynerf/coffee_martini/wood_sculpture"
+    clip_prompt = args.prompt
 
     to8b = lambda x: (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
@@ -204,13 +203,10 @@ if __name__ == "__main__":
         with torch.no_grad():
             # (1) 렌더링
             rendered_img = render_edited(gaussians, viewpoint_camera)
-    
-            # (2) Ground-truth (또는 original) 이미지 GPU로 이동
-            #gt_img = viewpoint_camera.original_image.to(device)
-            image = Image.open(os.path.join(edited_images_path, "edited_sculpture_render_time0_{:d}.png".format(dict_coffee_martini[int(viewpoint_camera.image_name)])))
-            transform = transforms.ToTensor()
-            gt_img = transform(image).cuda()
-    
+
+            # (2) Ground-truth: original training image
+            gt_img = viewpoint_camera.original_image.to(device)
+
             if gt_img.shape != rendered_img.shape:
                 # gt_img: [3, H1, W1]
                 # rendered_img: [3, H2, W2]
