@@ -41,6 +41,7 @@ text_encoder.requires_grad_(False)
 unet.requires_grad_(False)
 
 vae = vae.to(device, dtype=torch_dtype)
+vae.enable_slicing()  # encode one frame at a time to avoid OOM at full resolution
 text_encoder = text_encoder.to(device, dtype=torch_dtype)
 unet = unet.to(device, dtype=torch_dtype)
         
@@ -58,6 +59,8 @@ def parse_args():
     parser.add_argument("--steps", type=int, default=20)
     parser.add_argument("--guidance_scale", type=float, default=7.5)
     parser.add_argument("--image_guidance_scale", type=float, default=1.5)
+    parser.add_argument("--chunk_size", type=int, default=5,
+                        help="Frames per UNet forward pass. Reduce if you hit CUDA OOM.")
     return parser.parse_args()
 
 args = parse_args()
@@ -144,9 +147,16 @@ for i, t in tqdm(enumerate(pipe.scheduler.timesteps), total=len(pipe.scheduler.t
     latent_model_input = torch.cat([latents] * 3) # [3b, 4, sequence_length, h//4, w//4]
     latent_model_input = torch.cat([latent_model_input, image_latents], dim=1) # [3b, 8, sequence_length, h//4, w//4]
     
-    # predict the noise residual
-    with torch.no_grad():
-        noise_pred = pipe.unet(latent_model_input, t, prompt_embeds, None, None, False)[0] # [3b, 4, sequence_length, h//4, w//4]
+    # predict the noise residual — chunked along frame dim to avoid CUDA OOM
+    noise_pred_chunks = []
+    for c_start in range(0, sequence_length, args.chunk_size):
+        c_end = min(c_start + args.chunk_size, sequence_length)
+        lmi_chunk = latent_model_input[:, :, c_start:c_end, :, :]
+        with torch.no_grad():
+            noise_pred_chunks.append(
+                pipe.unet(lmi_chunk, t, prompt_embeds, None, None, False)[0]
+            )
+    noise_pred = torch.cat(noise_pred_chunks, dim=2) # [3b, 4, sequence_length, h//4, w//4]
     
     # perform classifier-free guidance
     noise_pred_text, noise_pred_image, noise_pred_uncond = noise_pred.chunk(3)
