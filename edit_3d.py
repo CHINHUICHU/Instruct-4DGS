@@ -13,7 +13,7 @@ import random
 import os, sys
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss
+from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss, depth_warp_consistency_loss
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
@@ -118,7 +118,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     ema_psnr_for_log = 0.0
 
     final_iter = train_iter
-    
+
+    torch.cuda.reset_peak_memory_stats()
     progress_bar = tqdm(range(first_iter, final_iter), desc="Training progress")
     first_iter += 1
     # lpips_model = lpips.LPIPS(net="alex").cuda()
@@ -232,10 +233,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         radii_list = []
         visibility_filter_list = []
         viewspace_point_tensor_list = []
+        depth_list = []
         for viewpoint_cam in viewpoint_cams:
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type)
             image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
             images.append(image.unsqueeze(0))
+            depth_list.append(render_pkg["depth"])
             '''
             # [debug]
             image_numpy = (image * 255).byte().permute(1, 2, 0).cpu().numpy()  # (H, W, C)
@@ -295,7 +298,16 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         # if opt.lambda_lpips !=0:
         #     lpipsloss = lpips_loss(image_tensor,gt_image_tensor,lpips_model)
         #     loss += opt.lambda_lpips * lpipsloss
-        
+
+        # StableGS depth consistency: penalises floaters introduced during 3D editing.
+        # All cameras in the batch are at t=0 from different viewpoints, making this
+        # a strong geometric constraint with no temporal ambiguity.
+        if (opt.lambda_depth_consistency > 0
+                and scene.dataset_type != "PanopticSports"
+                and len(depth_list) >= 2):
+            loss_depth = depth_warp_consistency_loss(depth_list, viewpoint_cams)
+            loss += opt.lambda_depth_consistency * loss_depth
+
         loss.backward()
         if torch.isnan(loss).any():
             print("loss is nan,end training, reexecv program now.")
@@ -375,6 +387,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" +f"_{stage}_" + str(iteration) + ".pth")
 
+    peak_alloc = torch.cuda.max_memory_allocated() / 1e9
+    peak_reserved = torch.cuda.max_memory_reserved() / 1e9
+    print(f"[PEAK VRAM][edit_3d][stage={stage}] allocated={peak_alloc:.2f}GB reserved={peak_reserved:.2f}GB points={gaussians._xyz.shape[0]}")
+
 def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, expname, edited_images_path, prompt, scene_name):
     # first_iter = 0
     tb_writer = prepare_output_and_logger(expname)
@@ -384,7 +400,8 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     scene = Scene(dataset, gaussians, load_coarse=None)
     
     gaussians.load_ply(args.ply_path)
-    gaussians.load_model(os.path.join(args.model_path,"point_cloud","iteration_" + str(14000)))
+    deform_path = args.deform_path if getattr(args, "deform_path", "") else os.path.join(args.model_path,"point_cloud","iteration_" + str(14000))
+    gaussians.load_model(deform_path)
     gaussians._deformation_table = torch.gt(torch.ones((gaussians.get_xyz.shape[0]),device="cuda"),0)
     
     timer.start()
@@ -496,6 +513,7 @@ if __name__ == "__main__":
     parser.add_argument("--expname", type=str, default = "")
     parser.add_argument("--configs", type=str, default = "")
     parser.add_argument("--ply_path", type=str, default = "")
+    parser.add_argument("--deform_path", type=str, default = "", help="Dir with deformation.pth/table/accum matching --ply_path. Defaults to point_cloud/iteration_14000.")
 
     parser.add_argument("--dataset", type=str, default = "")
     parser.add_argument("--scene", type=str, default = "")

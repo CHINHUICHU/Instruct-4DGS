@@ -101,7 +101,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     ema_psnr_for_log = 0.0
 
     final_iter = train_iter
-    
+
+    torch.cuda.reset_peak_memory_stats()
     progress_bar = tqdm(range(first_iter, final_iter), desc="Training progress")
     first_iter += 1
     # lpips_model = lpips.LPIPS(net="alex").cuda()
@@ -152,6 +153,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     # text_encoder is never needed again — move to CPU to free ~300 MB VRAM
     ip2p.text_encoder.to('cpu')
     torch.cuda.empty_cache()
+
+    offload_unet = getattr(args, "offload_unet", False)
+    if offload_unet:
+        ip2p.unet.to('cpu')
+        torch.cuda.empty_cache()
 
     count = 0
     for iteration in range(first_iter, final_iter+1):        
@@ -287,6 +293,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         #print("noise: ", noise.shape) # 1x4xfx96x128
         
         # predict the noise residual — run 3 separate passes to avoid [3b,...] peak activation
+        if offload_unet:
+            ip2p.unet.to(device)
         with torch.no_grad():
             noise_pred_text = ip2p.unet(
                 torch.cat([latents, image_latents], dim=1), t, prompt_embeds[0:1], None, None, False
@@ -303,6 +311,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 + guidance_scale * (noise_pred_text - noise_pred_image)
                 + image_guidance_scale * (noise_pred_image - noise_pred_uncond)
             )
+        if offload_unet:
+            ip2p.unet.to('cpu')
+            torch.cuda.empty_cache()
         
         alphas = ip2p.scheduler.alphas_cumprod.to(device)
         w = (1 - alphas[t]).view(-1, 1, 1, 1)
@@ -406,6 +417,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" +f"_{stage}_" + str(iteration) + ".pth")
+
+    peak_alloc = torch.cuda.max_memory_allocated() / 1e9
+    peak_reserved = torch.cuda.max_memory_reserved() / 1e9
+    print(f"[PEAK VRAM][refine_sds][stage={stage}] allocated={peak_alloc:.2f}GB reserved={peak_reserved:.2f}GB points={gaussians._xyz.shape[0]}")
+
 def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, expname, prompt, guidance_scale, image_guidance_scale):
     # first_iter = 0
     tb_writer = prepare_output_and_logger(expname)
@@ -415,8 +431,9 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     scene = Scene(dataset, gaussians, load_coarse=None)
     gaussians.load_ply(args.ply_path)
     print(f"Loaded ply from ${args.ply_path}")
+    _default_deform = os.path.join(args.model_path,"point_cloud","iteration_" + str(14000))
     
-    gaussians.load_model(os.path.join(args.model_path,"point_cloud","iteration_" + str(14000)))
+    gaussians.load_model(args.deform_path if getattr(args, "deform_path", "") else _default_deform)
     gaussians._deformation_table = torch.gt(torch.ones((gaussians.get_xyz.shape[0]),device="cuda"),0)
     print("Loaded deformation field")
     timer.start()
@@ -552,10 +569,13 @@ if __name__ == "__main__":
     parser.add_argument("--configs", type=str, default = "")
     
     parser.add_argument("--ply_path", type=str, default = "")
+    parser.add_argument("--deform_path", type=str, default = "", help="Dir with deformation.pth/table/accum matching --ply_path. Defaults to point_cloud/iteration_14000.")
     parser.add_argument("--prompt", type=str, default = "")
     parser.add_argument('--guidance_scale', type=float, default=10.5)
     parser.add_argument('--image_guidance_scale', type=float, default=1.2)
     parser.add_argument('--resize', type=int, default=512)
+    parser.add_argument('--offload_unet', action='store_true', default=False,
+                        help="Keep the IP2P UNet on CPU and move it to GPU only for the no_grad noise-prediction step (saves VRAM, slightly slower).")
 
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)

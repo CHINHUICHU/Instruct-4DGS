@@ -13,7 +13,7 @@ import random
 import os, sys
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss
+from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss, depth_warp_consistency_loss
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
@@ -177,6 +177,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         radii_list = []
         visibility_filter_list = []
         viewspace_point_tensor_list = []
+        depth_list = []
         for viewpoint_cam in viewpoint_cams:
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type)
             image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
@@ -185,11 +186,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 gt_image = viewpoint_cam.original_image.cuda()
             else:
                 gt_image  = viewpoint_cam['image'].cuda()
-            
+
             gt_images.append(gt_image.unsqueeze(0))
             radii_list.append(radii.unsqueeze(0))
             visibility_filter_list.append(visibility_filter.unsqueeze(0))
             viewspace_point_tensor_list.append(viewspace_point_tensor)
+            depth_list.append(render_pkg["depth"])
         
 
         radii = torch.cat(radii_list,0).max(dim=0).values
@@ -215,6 +217,17 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         # if opt.lambda_lpips !=0:
         #     lpipsloss = lpips_loss(image_tensor,gt_image_tensor,lpips_model)
         #     loss += opt.lambda_lpips * lpipsloss
+
+        # StableGS depth consistency: penalises floaters whose depth is
+        # geometrically inconsistent across views.  Applied in fine stage only,
+        # after early densification (iteration > 500) to avoid interfering with
+        # initial Gaussian placement.
+        if (opt.lambda_depth_consistency > 0 and stage == "fine"
+                and iteration > 500
+                and scene.dataset_type != "PanopticSports"
+                and len(depth_list) >= 2):
+            loss_depth = depth_warp_consistency_loss(depth_list, viewpoint_cams)
+            loss += opt.lambda_depth_consistency * loss_depth
         
         loss.backward()
         if torch.isnan(loss).any():

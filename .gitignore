@@ -1,3 +1,17 @@
+# Logs
+*.log
+
+# Videos and images
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
 *.pyc
 .vscode
 output
