@@ -78,6 +78,15 @@ python render_edited4d.py --configs ./arguments/dynerf/cook_spinach.py --ply_pat
 
 [4DGS + DAC](https://github.com/felixhungsv/Instruct-4DGS-MEGA)
 
+
+# Quantitative Results  
+
+![table](assets/table.png)
+
+# Qualitative Results 
+
+[merged_grid](assets/merged_grid.png)
+
 <!-- [c3dgs](https://github.com/yanruijie902136/Instruct-4DGS/tree/dynamicc3dgs) -->
 
 ## Acknowledgement
