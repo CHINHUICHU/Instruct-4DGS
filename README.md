@@ -72,14 +72,15 @@ python render_edited4d.py --configs ./arguments/dynerf/cook_spinach.py --ply_pat
 
 # Other 4dgs backbones
 
-[4d scafflod gs](https://github.com/jason-jasom/4dfgs-instruct)
+[4d-scafflod-GS](https://github.com/jason-jasom/4dfgs-instruct)
 
 [OMG4](https://github.com/jason-jasom/OMG4-Instruct)
 
 [4DGS + DAC](https://github.com/felixhungsv/Instruct-4DGS-MEGA)
 
+[Ex4DGS]()
 
-# Quantitative Results  
+# Quantitative Results
 
 ![table](assets/table.png)
 
