@@ -70,7 +70,25 @@ You can check the editing results using the script below.
 python render_edited4d.py --configs ./arguments/dynerf/cook_spinach.py --ply_path "./output/dynerf/cook_spinach/point_cloud_refine/Make it look like a fauvism painting/iteration_800/point_cloud.ply" -s ./data/dynerf/cook_spinach --model_path ./output/dynerf/cook_spinach
 ```
 
+# Other 4dgs backbones
 
+[4d-scafflod-GS](https://github.com/jason-jasom/4dfgs-instruct)
+
+[OMG4](https://github.com/jason-jasom/OMG4-Instruct)
+
+[4DGS + DAC](https://github.com/felixhungsv/Instruct-4DGS-MEGA)
+
+[Ex4DGS]()
+
+# Quantitative Results
+
+![table](assets/table.png)
+
+# Qualitative Results 
+
+[merged_grid](assets/merged_grid.png)
+
+<!-- [c3dgs](https://github.com/yanruijie902136/Instruct-4DGS/tree/dynamicc3dgs) -->
 
 ## Acknowledgement
 This work is built on many amazing research works and open-source projects: [4DGS](https://github.com/hustvl/4DGaussians), [Instruct-4D-to-4D](https://github.com/Friedrich-M/Instruct-4D-to-4D), etc. We are grateful for their excellent work and great contributions.
