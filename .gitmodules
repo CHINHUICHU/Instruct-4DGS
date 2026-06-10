@@ -8,3 +8,6 @@
 [submodule "SIBR_viewers"]
 	path = SIBR_viewers
 	url = https://gitlab.inria.fr/sibr/sibr_core
+[submodule "Ex4DGS"]
+	path = Ex4DGS
+	url = git@github.com:CHINHUICHU/Ex4DGS.git
