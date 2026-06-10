@@ -78,7 +78,7 @@ python render_edited4d.py --configs ./arguments/dynerf/cook_spinach.py --ply_pat
 
 [4DGS + DAC](https://github.com/felixhungsv/Instruct-4DGS-MEGA)
 
-[Ex4DGS]()
+[Ex4DGS](Ex4DGS.md)
 
 # Quantitative Results
 
